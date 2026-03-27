@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>清仓库存跟单系统 | 星穹协作版 · 精简数量控件</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <!-- Lightbox 多图支持 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.4/css/lightbox.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.4/js/lightbox-plus-jquery.min.js"></script>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: radial-gradient(circle at 10% 20%, #0a0f1e, #03050b);
+            min-height: 100vh;
+            padding: 28px;
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(59,130,246,0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(249,115,22,0.05) 0%, transparent 60%);
+            pointer-events: none; z-index: 0;
+        }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(12px);
+            border-radius: 2rem;
+            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2), 0 0 0 0.5px rgba(255,255,255,0.05) inset;
+            transition: all 0.3s;
+        }
+        .glass-card:hover { border-color: rgba(59,130,246,0.3); box-shadow: 0 20px 40px -12px rgba(0,0,0,0.4); }
+        .login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5,10,25,0.85); backdrop-filter: blur(20px);
+            display: flex; align-items: center; justify-content: center; z-index: 2000;
+        }
+        .login-card {
+            background: rgba(20,30,55,0.7); backdrop-filter: blur(20px);
+            border-radius: 2rem; padding: 2.5rem; width: 380px; text-align: center;
+            border: 1px solid rgba(59,130,246,0.3); box-shadow: 0 25px 45px -12px rgba(0,0,0,0.5);
+        }
+        .login-card .icon { width: 70px; height: 70px; background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(249,115,22,0.1)); border-radius: 60px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1rem; }
+        .login-card i { font-size: 36px; background: linear-gradient(135deg, #3b82f6, #f97316); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .login-card h2 { font-weight: 700; margin: 0.5rem 0; background: linear-gradient(135deg, #ffffff, #cbd5e1); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .login-card input { width: 100%; padding: 14px 18px; margin: 1rem 0; border-radius: 60px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-size: 1rem; outline: none; }
+        .login-card input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.2); }
+        .login-card button { background: linear-gradient(105deg, #3b82f6, #2563eb); width: 100%; border: none; padding: 12px; border-radius: 60px; color: white; font-weight: 600; cursor: pointer; }
+        .app-main { display: none; max-width: 1600px; margin: 0 auto; position: relative; z-index: 1; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; padding: 1rem 2rem; margin-bottom: 2rem; gap: 16px; }
+        .logo-area { display: flex; align-items: center; gap: 12px; }
+        .logo-area i { font-size: 2rem; background: linear-gradient(135deg, #3b82f6, #f97316); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .logo-area span { font-weight: 800; font-size: 1.3rem; background: linear-gradient(135deg, #ffffff, #94a3b8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .sync-badge { font-size: 0.7rem; background: rgba(59,130,246,0.2); padding: 4px 12px; border-radius: 40px; color: #3b82f6; font-weight: 500; }
+        .tool-group button { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); padding: 8px 20px; border-radius: 40px; margin: 0 6px; color: #e2e8f0; font-weight: 500; cursor: pointer; transition: 0.2s; }
+        .tool-group button.primary { background: linear-gradient(105deg, #3b82f6, #2563eb); border: none; color: white; box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
+        .tool-group button:hover { transform: translateY(-2px); background: rgba(59,130,246,0.3); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 28px; }
+        .stat-card { background: rgba(15,23,42,0.6); backdrop-filter: blur(12px); border-radius: 1.5rem; padding: 1.2rem 1.5rem; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255,255,255,0.08); }
+        .stat-info h4 { font-size: 0.8rem; font-weight: 500; color: #94a3b8; margin-bottom: 6px; }
+        .stat-info .stat-number { font-size: 1.8rem; font-weight: 700; background: linear-gradient(135deg, #fff, #cbd5e1); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .stat-icon { width: 48px; height: 48px; background: rgba(59,130,246,0.15); border-radius: 60px; display: flex; align-items: center; justify-content: center; color: #3b82f6; font-size: 1.4rem; }
+        .dashboard { display: flex; flex-wrap: wrap; gap: 28px; }
+        .shelf-area { flex: 1.2; min-width: 360px; padding: 1.5rem; }
+        .shelf-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 1.8rem; }
+        .shelf-selector select, .locate-input { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); padding: 8px 16px; border-radius: 40px; color: #e2e8f0; font-weight: 500; cursor: pointer; }
+        .locate-input { width: 130px; }
+        .locate-btn { background: linear-gradient(105deg, #3b82f6, #2563eb); border: none; padding: 8px 18px; border-radius: 40px; color: white; cursor: pointer; font-weight: 500; }
+        .rack-grid { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+        .rack-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+        .cell { background: rgba(0,0,0,0.3); border-radius: 1rem; padding: 12px 6px; text-align: center; cursor: pointer; transition: 0.2s; border: 1px solid rgba(255,255,255,0.08); min-height: 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .cell:hover { transform: translateY(-3px); border-color: #3b82f6; background: rgba(59,130,246,0.1); }
+        .pos-code { font-size: 0.7rem; font-weight: 600; background: rgba(59,130,246,0.2); padding: 4px 12px; border-radius: 40px; margin-bottom: 8px; color: #60a5fa; }
+        .cell .product-info { color: #ffffff; font-weight: 500; font-size: 0.7rem; }
+        .right-panel { flex: 2; min-width: 520px; display: flex; flex-direction: column; gap: 28px; }
+        .data-card { padding: 1.5rem; }
+        .card-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 1.2rem; display: flex; align-items: center; justify-content: space-between; color: #f1f5f9; }
+        .card-title i { background: linear-gradient(135deg, #3b82f6, #f97316); -webkit-background-clip: text; background-clip: text; color: transparent; margin-right: 8px; }
+        .filter-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+        .filter-buttons { display: flex; gap: 10px; }
+        .filter-chip { background: rgba(0,0,0,0.4); border-radius: 40px; padding: 6px 18px; font-size: 0.85rem; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); font-weight: 500; color: #cbd5e1; }
+        .filter-chip.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+        .stock-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; color: #e2e8f0; }
+        .stock-table th, .stock-table td { padding: 10px 6px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
+        .stock-table th { font-weight: 600; color: #94a3b8; text-align: left; }
+        .img-thumb { width: 45px; height: 45px; object-fit: cover; border-radius: 8px; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); }
+        .image-gallery { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+        .add-image-btn { width: 45px; height: 45px; background: rgba(59,130,246,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px dashed rgba(255,255,255,0.3); color: #60a5fa; }
+        .remove-img-btn { background: rgba(0,0,0,0.5); border: none; border-radius: 12px; padding: 2px 6px; font-size: 0.6rem; color: #f87171; cursor: pointer; margin-left: 4px; }
+        .qty-input { width: 60px; text-align: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; color: #e2e8f0; font-weight: 500; font-size: 0.85rem; padding: 4px 6px; outline: none; }
+        .warning-badge { background: rgba(245,158,11,0.2); color: #fbbf24; border-radius: 20px; padding: 2px 8px; font-size: 0.7rem; margin-left: 6px; }
+        .form-field-group { display: flex; flex-direction: column; flex: 1; min-width: 80px; }
+        .form-field-group label { font-size: 0.7rem; color: #94a3b8; margin-bottom: 4px; font-weight: 500; }
+        .flex-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; align-items: flex-end; }
+        .btn-submit { background: linear-gradient(105deg, #3b82f6, #2563eb); border: none; padding: 8px 24px; border-radius: 40px; color: white; font-weight: 600; cursor: pointer; }
+        .action-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        .action-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 5px 12px; border-radius: 40px; color: #cbd5e1; cursor: pointer; font-size: 0.75rem; }
+        .action-btn.danger { color: #f87171; border-color: rgba(248,113,113,0.3); }
+        .log-panel { margin-top: 12px; max-height: 120px; overflow-y: auto; font-size: 0.7rem; color: #94a3b8; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; }
+        .alert-sync { position: fixed; bottom: 24px; right: 24px; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); padding: 8px 18px; border-radius: 60px; font-size: 0.8rem; color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); z-index: 1000; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 10px; }
+        .target-hint { background: rgba(59,130,246,0.2); border-radius: 40px; padding: 2px 12px; font-size: 0.7rem; color: #60a5fa; display: inline-block; margin-left: 12px; }
+        .image-preview-item { display: flex; flex-direction: column; align-items: center; width: 60px; margin: 4px; }
+        .image-preview-item img { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); }
+        .image-preview-item span { font-size: 0.6rem; color: #94a3b8; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+<div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+        <div class="icon"><i class="fas fa-cube"></i></div>
+        <h2>清仓库存系统</h2>
+        <p style="color:#94a3b8; font-size:0.85rem;">规格管理 · 多图协作</p>
+        <input type="password" id="loginPassword" placeholder="访问密码" autocomplete="off">
+        <button id="loginBtn">登 录</button>
+        <p style="margin-top: 18px; font-size: 0.7rem; color:#64748b;">默认密码: 666666</p>
+    </div>
+</div>
+
+<div id="appMain" class="app-main">
+    <div class="toolbar glass-card">
+        <div class="logo-area"><i class="fas fa-warehouse"></i><span>清仓协同平台</span><span class="sync-badge" id="syncStatus"><i class="fas fa-circle"></i> 实时同步</span></div>
+        <div class="tool-group">
+            <button id="manualSaveBtn" class="primary"><i class="fas fa-save"></i> 手动保存</button>
+            <button id="undoBtn"><i class="fas fa-undo-alt"></i> 撤销</button>
+            <button id="redoBtn"><i class="fas fa-forward"></i> 前进</button>
+            <button id="exportBtn"><i class="fas fa-download"></i> 导出数据</button>
+            <button id="refreshBtn"><i class="fas fa-sync-alt"></i> 刷新</button>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-info"><h4>总商品数</h4><div class="stat-number" id="statTotalItems">0</div></div><div class="stat-icon"><i class="fas fa-boxes"></i></div></div>
+        <div class="stat-card"><div class="stat-info"><h4>总库存量</h4><div class="stat-number" id="statTotalQty">0</div></div><div class="stat-icon"><i class="fas fa-layer-group"></i></div></div>
+        <div class="stat-card"><div class="stat-info"><h4>总重量(kg)</h4><div class="stat-number" id="statTotalWeight">0</div></div><div class="stat-icon"><i class="fas fa-weight-hanging"></i></div></div>
+        <div class="stat-card"><div class="stat-info"><h4>占用货位</h4><div class="stat-number" id="statOccupiedSlots">0</div></div><div class="stat-icon"><i class="fas fa-archive"></i></div></div>
+        <div class="stat-card"><div class="stat-info"><h4>低库存预警</h4><div class="stat-number" id="statLowStock">0</div></div><div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div></div>
+    </div>
+
+    <div class="dashboard">
+        <div class="shelf-area glass-card">
+            <div class="shelf-header">
+                <div class="shelf-selector"><i class="fas fa-archive" style="color:#60a5fa;"></i><select id="shelfSelect"></select></div>
+                <div><input type="text" id="locateInput" class="locate-input" placeholder="定位 A-1-1"><button id="locateBtn" class="locate-btn"><i class="fas fa-location-dot"></i> 定位</button></div>
+            </div>
+            <div id="shelfGridContainer" class="rack-grid"></div>
+            <div style="margin-top: 20px; font-size:0.7rem; text-align:center; color:#94a3b8; background:rgba(0,0,0,0.3); padding:8px; border-radius:60px;"><i class="fas fa-fingerprint"></i> 点击货位 → 右侧仅显示该货位商品 | 支持多规格</div>
+        </div>
+
+        <div class="right-panel">
+            <div class="data-card glass-card">
+                <div class="card-title"><span><i class="fas fa-clipboard-list"></i> 清仓跟单表</span><span style="font-size:0.7rem; background:rgba(59,130,246,0.2); padding:2px 12px; border-radius:40px;" id="stockCount">0</span></div>
+                <div class="filter-bar">
+                    <div class="filter-buttons"><div id="showAllBtn" class="filter-chip active"><i class="fas fa-globe"></i> 全部商品</div><div id="showShelfFilter" class="filter-chip"><i class="fas fa-location-dot"></i> 当前货位: <span id="currentFilterPos">无</span></div></div>
+                    <div style="display: flex; gap: 8px;"><input type="text" id="searchInput" placeholder="搜索商品/类目" style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.15); border-radius:60px; padding:6px 12px; width:160px; color:#e2e8f0;"><button id="searchBtn" style="background:#3b82f6; border:none; border-radius:60px; padding:6px 12px; color:white;"><i class="fas fa-search"></i></button><button id="resetSearchBtn" style="background:rgba(0,0,0,0.4); border:none; border-radius:60px; padding:6px 12px; color:#cbd5e1;">重置</button></div>
+                </div>
+                <div class="action-bar"><button id="batchDeleteBtn" class="action-btn danger"><i class="fas fa-trash-alt"></i> 批量删除</button><button id="quickAddSuggestion" class="action-btn"><i class="fas fa-lightbulb"></i> 快速补货建议</button></div>
+                <div style="overflow-x: auto; max-height: 420px; overflow-y: auto;">
+                    <table class="stock-table">
+                        <thead> <th style="width:30px"><input type="checkbox" id="selectAllCheckbox"></th><th>图片(多图)</th><th>货位码</th><th>商品名称</th><th>尺码</th><th>颜色</th><th>数量</th><th>重量(kg)</th><th>备注</th><th>操作</th> </thead>
+                        <tbody id="stockTableBody"> <td colspan="10" style="text-align:center;">加载中... </tbody>
+                     </table>
+                </div>
+                <div class="log-panel" id="operationLog"><i class="fas fa-history"></i> 最近操作记录将显示在这里</div>
+            </div>
+
+            <div class="data-card glass-card">
+                <div class="card-title"><span><i class="fas fa-plus-circle"></i> 补充商品</span><span id="targetHint" class="target-hint">正在补充到: 未选择</span></div>
+                <form id="addStockForm">
+                    <div class="flex-row">
+                        <div class="form-field-group"><label>货架</label><select id="formShelf" required></select></div>
+                        <div class="form-field-group"><label>层 (1-4)</label><input type="number" id="formLevel" min="1" max="4" value="1"></div>
+                        <div class="form-field-group"><label>列 (1-5)</label><input type="number" id="formCol" min="1" max="5" value="1"></div>
+                    </div>
+                    <div class="flex-row">
+                        <div class="form-field-group"><label>商品名称 *</label><input type="text" id="formProductName" required></div>
+                        <div class="form-field-group"><label>尺码</label><input type="text" id="formSize" placeholder="如 M/L/XL"></div>
+                        <div class="form-field-group"><label>颜色</label><input type="text" id="formColor"></div>
+                    </div>
+                    <div class="flex-row">
+                        <div class="form-field-group"><label>数量</label><input type="number" id="formQty" value="1" min="1"></div>
+                        <div class="form-field-group"><label>重量 (kg)</label><input type="number" id="formWeight" step="0.1"></div>
+                        <div class="form-field-group"><label>备注</label><textarea id="formRemark" rows="1" style="flex:1;"></textarea></div>
+                    </div>
+                    <div class="flex-row">
+                        <div class="form-field-group" style="flex:2;"><label>商品图片 (最多10张)</label><input type="file" id="formImages" accept="image/*" multiple></div>
+                        <div id="imagePreviewContainer" style="display: flex; gap: 8px; flex-wrap: wrap; flex:3;"></div>
+                        <button type="submit" class="btn-submit"><i class="fas fa-cloud-upload-alt"></i> 补充商品</button>
+                    </div>
+                </form>
+                <div style="font-size:0.7rem; margin-top:12px; color:#94a3b8;"><i class="fas fa-info-circle"></i> 最多10张图片 | 低库存阈值:5件 | 尺码/颜色/重量/备注均可编辑</div>
+            </div>
+        </div>
+    </div>
+    <div id="syncToast" class="alert-sync">✅ 实时协作已就绪</div>
+</div>
+
+<script>
+    // Firebase 配置 (替换为真实项目)
+    const firebaseConfig = {
+        apiKey: "AIzaSyB8RrqP4lS2jK9zX3wQ7yU5pLmNvC6tYbA",
+        authDomain: "your-project.firebaseapp.com",
+        databaseURL: "https://your-project-default-rtdb.firebaseio.com",
+        projectId: "your-project",
+        storageBucket: "your-project.appspot.com",
+        messagingSenderId: "123456789012",
+        appId: "1:123456789012:web:abcdef123456"
+    };
+    let realtimeDB = null, dbRef = null, useLocalFallback = true;
+    try {
+        if (firebaseConfig.apiKey !== "AIzaSyB8RrqP4lS2jK9zX3wQ7yU5pLmNvC6tYbA" && firebaseConfig.databaseURL.includes("firebaseio.com")) {
+            firebase.initializeApp(firebaseConfig);
+            realtimeDB = firebase.database();
+            dbRef = realtimeDB.ref('/inventory_v12_final');
+            useLocalFallback = false;
+            console.log("🔥 Firebase 已连接");
+        } else console.warn("⚠️ 未配置Firebase，使用本地存储");
+    } catch(e) { console.warn(e); }
+
+    let inventory = [];
+    let currentShelf = 'A', currentKeyword = '', currentFilterPos = null;
+    let historyStack = [], redoStack = [];
+    let autoSaveTimer = null;
+    let operationLogs = [];
+    const LOW_STOCK_THRESHOLD = 5, MAX_IMAGES = 10;
+
+    function deepCopy(arr) { return JSON.parse(JSON.stringify(arr)); }
+    function clearRedoStack() { redoStack = []; }
+    function pushHistory() { const snap = deepCopy(inventory); historyStack.push(snap); if (historyStack.length > 5) historyStack.shift(); clearRedoStack(); }
+    async function undo() {
+        if (historyStack.length === 0) { showToast("没有可撤销的步骤"); return; }
+        redoStack.push(deepCopy(inventory));
+        const lastState = historyStack.pop();
+        inventory = deepCopy(lastState);
+        await syncToCloudAndLocal();
+        refreshAllViews();
+        addLog("撤销操作", "恢复到上一步状态");
+        showToast("已撤销上一步操作");
+    }
+    async function redo() {
+        if (redoStack.length === 0) { showToast("没有可前进的步骤"); return; }
+        historyStack.push(deepCopy(inventory));
+        const nextState = redoStack.pop();
+        inventory = deepCopy(nextState);
+        await syncToCloudAndLocal();
+        refreshAllViews();
+        addLog("前进操作", "恢复到下一个状态");
+        showToast("已前进到下一步");
+    }
+    async function syncToCloudAndLocal() {
+        localStorage.setItem('inventory_backup_pro', JSON.stringify(inventory));
+        if (!useLocalFallback && realtimeDB && dbRef) { try { await dbRef.set(inventory); } catch(e) {} }
+        updateStats();
+    }
+    async function loadInitialData() {
+        if (!useLocalFallback && realtimeDB && dbRef) {
+            dbRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data && Array.isArray(data)) { inventory = data; refreshAllViews(); showToast("云端同步"); addLog("同步", "从云端加载最新数据"); }
+                else if (!data || data.length === 0) { initDemoData(); syncToCloudAndLocal(); }
+            });
+            const snap = await dbRef.once('value');
+            let data = snap.val();
+            if (data && Array.isArray(data)) inventory = data;
+            if (!inventory.length) initDemoData();
+        } else {
+            const local = localStorage.getItem('inventory_backup_pro');
+            if (local) inventory = JSON.parse(local);
+            if (!inventory.length) initDemoData();
+        }
+        refreshAllViews();
+    }
+    function initDemoData() {
+        const base = Date.now();
+        const demoImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'%3E%3Cpath d='M4 4h16v2H4V4zm2 4h12v2H6V8zm14 4H4v2h16v-2zm-8 4h-4v2h4v-2z'/%3E%3C/svg%3E";
+        inventory = [
+            { id: base+1, shelf:'A', level:1, col:1, positionCode:'A-1-1', productName:'限量运动鞋', size:'42', color:'黑', quantity:12, weight:0.8, remark:'热销款', images: [demoImg], createTime: base },
+            { id: base+2, shelf:'A', level:1, col:1, positionCode:'A-1-1', productName:'机能袜', size:'均码', color:'白', quantity:35, weight:0.05, remark:'纯棉', images: [demoImg], createTime: base+5 },
+            { id: base+3, shelf:'A', level:2, col:3, positionCode:'A-2-3', productName:'纯棉T恤', size:'L', color:'灰', quantity:22, weight:0.2, remark:'', images: [demoImg], createTime: base+10 },
+            { id: base+4, shelf:'B', level:1, col:2, positionCode:'B-1-2', productName:'钛合金杯', size:'350ml', color:'银', quantity:3, weight:0.3, remark:'低库存', images: [demoImg], createTime: base+15 },
+            { id: base+5, shelf:'C', level:3, col:4, positionCode:'C-3-4', productName:'机械键盘', size:'87键', color:'黑', quantity:5, weight:1.2, remark:'RGB', images: [demoImg], createTime: base+20 }
+        ];
+        syncToCloudAndLocal();
+    }
+    function addLog(action, detail) { const time = new Date().toLocaleTimeString(); operationLogs.unshift({ time, action, detail }); if (operationLogs.length > 20) operationLogs.pop(); const logDiv = document.getElementById('operationLog'); if (logDiv) logDiv.innerHTML = `<i class="fas fa-history"></i> 最近操作记录<br>` + operationLogs.slice(0,10).map(l => `<div style="margin-top:4px;">[${l.time}] ${l.action}: ${l.detail}</div>`).join(''); }
+    function getDisplayedItems() { let items = [...inventory]; if (currentFilterPos) items = items.filter(i => i.positionCode === currentFilterPos); if (currentKeyword.trim()) { const kw = currentKeyword.toLowerCase(); items = items.filter(i => i.productName.toLowerCase().includes(kw) || (i.size && i.size.toLowerCase().includes(kw)) || (i.color && i.color.toLowerCase().includes(kw))); } return items; }
+    function updateStats() {
+        const totalItems = inventory.length;
+        const totalQty = inventory.reduce((s,i)=>s+i.quantity,0);
+        const totalWeight = inventory.reduce((s,i)=>s + (i.weight || 0) * i.quantity, 0);
+        const occupiedSlots = new Set(inventory.map(i=>`${i.shelf}-${i.level}-${i.col}`)).size;
+        const lowStockCount = inventory.filter(i=>i.quantity<LOW_STOCK_THRESHOLD).length;
+        document.getElementById('statTotalItems').innerText = totalItems;
+        document.getElementById('statTotalQty').innerText = totalQty;
+        document.getElementById('statTotalWeight').innerText = totalWeight.toFixed(2);
+        document.getElementById('statOccupiedSlots').innerText = occupiedSlots;
+        document.getElementById('statLowStock').innerText = lowStockCount;
+    }
+    function refreshAllViews() { renderShelfGrid(); renderStockTable(); document.getElementById('stockCount').innerText = getDisplayedItems().length; updateStats(); const posSpan = document.getElementById('currentFilterPos'); if (currentFilterPos) { posSpan.innerText = currentFilterPos; document.getElementById('showShelfFilter').classList.add('active'); document.getElementById('showAllBtn').classList.remove('active'); } else { posSpan.innerText = '无'; document.getElementById('showShelfFilter').classList.remove('active'); document.getElementById('showAllBtn').classList.add('active'); } }
+    
+    function renderShelfGrid() {
+        const container = document.getElementById('shelfGridContainer'); if (!container) return;
+        const shelfItems = inventory.filter(i => i.shelf === currentShelf);
+        let matrix = Array(4).fill().map(() => Array(5).fill().map(() => []));
+        for (let item of shelfItems) { const l = item.level-1, c = item.col-1; if (l>=0 && l<4 && c>=0 && c<5) matrix[l][c].push(item); }
+        let html = `<div class="rack-grid">`;
+        for (let lvl = 3; lvl >= 0; lvl--) { html += `<div class="rack-row">`; for (let colIdx = 4; colIdx >= 0; colIdx--) {
+            const items = matrix[lvl][colIdx] || []; const levelNum = lvl+1, colNum = colIdx+1; const posCode = `${currentShelf}-${levelNum}-${colNum}`;
+            let inner = `<div class="pos-code">${posCode}</div>`;
+            if (items.length === 0) inner += `<div style="font-size:0.7rem; color:#64748b;">🟩 空货位</div>`;
+            else {
+                inner += `<div class="product-info"><i class="fas fa-boxes"></i> ${items.length}种商品</div>`;
+                const names = items.map(it => it.productName.length>7? it.productName.slice(0,6)+'..': it.productName).join(', ');
+                inner += `<div class="product-info" style="font-size:0.65rem;">${names.slice(0,30)}</div>`;
+                inner += `<div class="product-info" style="font-size:0.6rem;">总库存: ${items.reduce((s,i)=>s+i.quantity,0)}</div>`;
+            }
+            html += `<div class="cell" data-pos="${posCode}" onclick="selectPosition('${posCode}')">${inner}</div>`;
+        } html += `</div>`; } html += `</div>`;
+        container.innerHTML = html;
+    }
+    window.selectPosition = function(posCode) { currentFilterPos = posCode; currentKeyword = ''; document.getElementById('searchInput').value = ''; refreshAllViews(); addLog("筛选货位", `显示货位 ${posCode}`); showToast(`已筛选货位: ${posCode}`); };
+    function showAllItems() { currentFilterPos = null; currentKeyword = ''; document.getElementById('searchInput').value = ''; refreshAllViews(); addLog("筛选", "显示全部商品"); showToast("显示全部商品"); }
+    
+    // 数量修改（仅使用数字输入框，无额外加减按钮）
+    async function updateQuantity(itemId, newQuantity) {
+        const idx = inventory.findIndex(i => i.id == itemId);
+        if (idx === -1) return false;
+        let qty = parseInt(newQuantity);
+        if (isNaN(qty)) qty = 1;
+        qty = Math.max(0, qty);
+        if (qty === inventory[idx].quantity) return false;
+        pushHistory();
+        inventory[idx].quantity = qty;
+        await syncToCloudAndLocal();
+        refreshAllViews();
+        addLog("数量调整", `${inventory[idx].productName} 数量改为 ${qty}`);
+        return true;
+    }
+    
+    // 重量修改（同步总重量）
+    async function updateWeight(itemId, newWeight) {
+        const idx = inventory.findIndex(i => i.id == itemId);
+        if (idx === -1) return;
+        let weight = parseFloat(newWeight);
+        if (isNaN(weight)) weight = 0;
+        if (weight === inventory[idx].weight) return;
+        pushHistory();
+        inventory[idx].weight = weight;
+        await syncToCloudAndLocal();
+        refreshAllViews();
+        addLog("重量调整", `${inventory[idx].productName} 重量改为 ${weight}kg`);
+    }
+    
+    // 多图管理
+    async function addImageToItem(itemId, newImageBase64) {
+        const idx = inventory.findIndex(i => i.id == itemId);
+        if (idx === -1) return false;
+        if (!inventory[idx].images) inventory[idx].images = [];
+        if (inventory[idx].images.length >= MAX_IMAGES) { showToast(`最多只能上传${MAX_IMAGES}张图片`); return false; }
+        pushHistory();
+        inventory[idx].images.push(newImageBase64);
+        await syncToCloudAndLocal();
+        refreshAllViews();
+        addLog("添加图片", `商品 ${inventory[idx].productName} 新增一张图片`);
+        return true;
+    }
+    async function removeImageFromItem(itemId, imgIndex) {
+        const idx = inventory.findIndex(i => i.id == itemId);
+        if (idx === -1) return;
+        pushHistory();
+        inventory[idx].images.splice(imgIndex, 1);
+        await syncToCloudAndLocal();
+        refreshAllViews();
+        addLog("删除图片", `商品 ${inventory[idx].productName} 移除一张图片`);
+    }
+    window.removeImageFromItem = removeImageFromItem;
+    window.uploadMoreImages = function(itemId) {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+        input.onchange = async (e) => {
+            const files = Array.from(e.target.files); if (files.length === 0) return;
+            const idx = inventory.findIndex(i => i.id == itemId); if (idx === -1) return;
+            const currentCount = (inventory[idx].images || []).length;
+            const remaining = MAX_IMAGES - currentCount;
+            if (files.length > remaining) { alert(`最多还能添加 ${remaining} 张图片`); return; }
+            for (let file of files) { const reader = new FileReader(); const base64 = await new Promise(resolve => { reader.onload = ev => resolve(ev.target.result); reader.readAsDataURL(file); }); await addImageToItem(itemId, base64); }
+        };
+        input.click();
+    };
+    
+    function renderStockTable() {
+        const items = getDisplayedItems();
+        const tbody = document.getElementById('stockTableBody');
+        if (items.length === 0) { tbody.innerHTML = '发展<td colspan="10" style="text-align:center;">暂无商品数据发展</td>'; return; }
+        let html = '';
+        for (let item of items) {
+            const isLowStock = item.quantity < LOW_STOCK_THRESHOLD;
+            const images = item.images || [];
+            let galleryHtml = `<div class="image-gallery">`;
+            images.forEach((img, idx) => { galleryHtml += `<a href="${img}" data-lightbox="item-${item.id}" data-title="${item.productName} - 图${idx+1}"><img class="img-thumb" src="${img}" onerror="this.src='https://placehold.co/45x45?text=Err'"></a><div class="image-controls"><button class="remove-img-btn" onclick="removeImageFromItem(${item.id}, ${idx})"><i class="fas fa-trash-alt"></i></button></div>`; });
+            if (images.length < MAX_IMAGES) galleryHtml += `<div class="add-image-btn" onclick="uploadMoreImages(${item.id})"><i class="fas fa-plus"></i></div>`;
+            galleryHtml += `</div>`;
+            const warningBadge = isLowStock ? `<span class="warning-badge"><i class="fas fa-exclamation-circle"></i> 低库存</span>` : '';
+            html += `<tr>
+                        <td style="text-align:center"><input type="checkbox" class="item-checkbox" data-id="${item.id}"> </td>
+                        <td>${galleryHtml}</td>
+                        <td contenteditable="true" class="editable-pos" data-id="${item.id}" data-field="positionCode">${item.positionCode}</td>
+                        <td contenteditable="true" class="editable-field" data-id="${item.id}" data-field="productName">${escapeHtml(item.productName)} ${warningBadge}</td>
+                        <td contenteditable="true" class="editable-field" data-id="${item.id}" data-field="size">${escapeHtml(item.size || '')}</td>
+                        <td contenteditable="true" class="editable-field" data-id="${item.id}" data-field="color">${escapeHtml(item.color || '')}</td>
+                        <td><input type="number" class="qty-input" value="${item.quantity}" step="1" min="0" onchange="updateQuantity(${item.id}, this.value)"></td>
+                        <td contenteditable="true" class="editable-weight" data-id="${item.id}" data-field="weight">${item.weight !== undefined ? item.weight : ''}</td>
+                        <td contenteditable="true" class="editable-field" data-id="${item.id}" data-field="remark">${escapeHtml(item.remark || '')}</td>
+                        <td><button class="btn-icon delete-btn-icon" onclick="deleteItemById('${item.id}')"><i class="fas fa-trash-alt"></i> 删除</button></td>
+                      </tr>`;
+        }
+        tbody.innerHTML = html;
+        // 绑定编辑事件（货位、名称、尺码、颜色、备注、重量）
+        document.querySelectorAll('.editable-field, .editable-pos, .editable-weight').forEach(el => {
+            el.addEventListener('blur', async (e) => {
+                const id = parseInt(el.dataset.id);
+                const field = el.dataset.field;
+                let newVal = el.innerText.trim();
+                if (field === 'weight') {
+                    newVal = parseFloat(newVal) || 0;
+                    await updateWeight(id, newVal);
+                    return;
+                }
+                if (field === 'positionCode') {
+                    const parts = newVal.split('-');
+                    if (parts.length!==3 || !['A','B','C','D','E','F','G','H'].includes(parts[0]) || parts[1]<1||parts[1]>4||parts[2]<1||parts[2]>5) {
+                        alert("货位格式应为 A-1-1"); refreshAllViews(); return;
+                    }
+                }
+                pushHistory();
+                const idx = inventory.findIndex(i => i.id === id);
+                if (idx !== -1) {
+                    const oldVal = inventory[idx][field];
+                    if (field === 'positionCode') {
+                        const parts = newVal.split('-');
+                        inventory[idx].positionCode = newVal;
+                        inventory[idx].shelf = parts[0];
+                        inventory[idx].level = parseInt(parts[1]);
+                        inventory[idx].col = parseInt(parts[2]);
+                    } else {
+                        inventory[idx][field] = newVal;
+                    }
+                    await syncToCloudAndLocal();
+                    refreshAllViews();
+                    addLog("编辑", `${field} 从 ${oldVal} 改为 ${newVal}`);
+                    showToast("已更新");
+                }
+            });
+        });
+    }
+    window.updateQuantity = updateQuantity;
+    window.updateWeight = updateWeight;
+    window.deleteItemById = async function(id) {
+        if (confirm("确认删除该商品？")) { pushHistory(); const item = inventory.find(i => i.id == id); inventory = inventory.filter(i => i.id != id); await syncToCloudAndLocal(); refreshAllViews(); addLog("删除商品", `${item?.productName} (${item?.positionCode})`); }
+    };
+    async function batchDelete() {
+        const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+        if (checkboxes.length === 0) { alert("请至少选择一个商品"); return; }
+        if (!confirm(`确定删除 ${checkboxes.length} 个商品吗？`)) return;
+        pushHistory();
+        const idsToDelete = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+        const deletedNames = inventory.filter(i => idsToDelete.includes(i.id)).map(i => i.productName).join(',');
+        inventory = inventory.filter(i => !idsToDelete.includes(i.id));
+        await syncToCloudAndLocal();
+        refreshAllViews();
+        addLog("批量删除", `删除了 ${idsToDelete.length} 个商品: ${deletedNames.slice(0,50)}`);
+        showToast(`已删除 ${idsToDelete.length} 个商品`);
+    }
+    function quickAddSuggestion() {
+        const lowStockItems = inventory.filter(i => i.quantity < LOW_STOCK_THRESHOLD);
+        if (lowStockItems.length === 0) { showToast("暂无低库存商品"); return; }
+        let msg = "建议补货商品:\n";
+        lowStockItems.forEach(i => msg += `${i.productName} (${i.positionCode}) 当前库存 ${i.quantity}\n`);
+        alert(msg);
+        addLog("补货建议", `共 ${lowStockItems.length} 种商品低于阈值`);
+    }
+    async function addStockItem(e) {
+        e.preventDefault();
+        const shelf = document.getElementById('formShelf').value;
+        const level = parseInt(document.getElementById('formLevel').value);
+        const col = parseInt(document.getElementById('formCol').value);
+        const productName = document.getElementById('formProductName').value.trim();
+        const size = document.getElementById('formSize').value.trim();
+        const color = document.getElementById('formColor').value.trim();
+        const quantity = parseInt(document.getElementById('formQty').value) || 1;
+        const weight = parseFloat(document.getElementById('formWeight').value) || 0;
+        const remark = document.getElementById('formRemark').value.trim();
+        const files = document.getElementById('formImages').files;
+        if (!productName) return alert("请填写商品名称");
+        if (files.length > MAX_IMAGES) { alert(`最多只能上传${MAX_IMAGES}张图片`); return; }
+        let images = [];
+        for (let file of files) {
+            const reader = new FileReader();
+            const base64 = await new Promise(resolve => { reader.onload = ev => resolve(ev.target.result); reader.readAsDataURL(file); });
+            images.push(base64);
+        }
+        if (images.length === 0) images.push("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ccc'%3E%3Crect width='24' height='24'/%3E%3C/svg%3E");
+        pushHistory();
+        const newId = Date.now() + Math.random() * 10000;
+        inventory.push({ id: newId, shelf, level, col, positionCode: `${shelf}-${level}-${col}`, productName, size, color, quantity, weight, remark, images, createTime: Date.now() });
+        await syncToCloudAndLocal();
+        refreshAllViews();
+        document.getElementById('addStockForm').reset();
+        document.getElementById('imagePreviewContainer').innerHTML = '';
+        addLog("添加商品", `${productName} 至 ${shelf}-${level}-${col} (${images.length}张图)`);
+        showToast(`已添加 ${productName}`);
+    }
+    async function manualSave() { await syncToCloudAndLocal(); showToast("手动保存成功"); addLog("手动保存", "数据已同步"); }
+    function exportData() {
+        const items = getDisplayedItems();
+        const csvRows = [["货位码","商品名称","尺码","颜色","数量","重量(kg)","备注","图片数量"]];
+        for (let item of items) csvRows.push([item.positionCode, item.productName, item.size||'', item.color||'', item.quantity, item.weight||'', item.remark||'', (item.images||[]).length]);
+        const csvContent = csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+        const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a"); const url = URL.createObjectURL(blob);
+        link.href = url; link.setAttribute("download", `库存数据_${new Date().toISOString().slice(0,19)}.csv`);
+        document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+        addLog("导出数据", `导出 ${items.length} 条记录`); showToast("导出成功");
+    }
+    function startAutoSave() { if(autoSaveTimer) clearInterval(autoSaveTimer); autoSaveTimer = setInterval(async () => { await syncToCloudAndLocal(); }, 30000); }
+    function quickLocate() {
+        let val = document.getElementById('locateInput').value.trim().toUpperCase();
+        const match = val.match(/^([A-H])-([1-4])-([1-5])$/);
+        if (!match) return alert("格式: A-1-1");
+        const shelfTarget = match[1], level = parseInt(match[2]), col = parseInt(match[3]);
+        currentShelf = shelfTarget; document.getElementById('shelfSelect').value = currentShelf;
+        renderShelfGrid();
+        setTimeout(() => {
+            const cells = document.querySelectorAll('.cell');
+            for (let cell of cells) {
+                if (cell.getAttribute('data-pos') === `${shelfTarget}-${level}-${col}`) {
+                    cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    cell.style.transform = 'scale(1.02)'; cell.style.backgroundColor = 'rgba(59,130,246,0.3)';
+                    setTimeout(() => { cell.style.transform = ''; cell.style.backgroundColor = ''; }, 800);
+                    break;
+                }
+            }
+        }, 100);
+        addLog("定位", `跳转到 ${shelfTarget}-${level}-${col}`);
+    }
+    function updateTargetHint() {
+        const shelf = document.getElementById('formShelf').value;
+        const level = document.getElementById('formLevel').value;
+        const col = document.getElementById('formCol').value;
+        document.getElementById('targetHint').innerHTML = `正在补充到: ${shelf}-${level}-${col}`;
+    }
+    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m])); }
+    function showToast(msg) { const t = document.getElementById('syncToast'); t.innerText = msg; t.style.opacity='1'; setTimeout(()=>t.style.opacity='0.9', 2000); }
+    function initLogin() {
+        document.getElementById('loginBtn').onclick = () => {
+            if (document.getElementById('loginPassword').value === '666666') {
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('appMain').style.display = 'block';
+                initApp();
+            } else alert("密码错误");
+        };
+    }
+    async function initApp() {
+        await loadInitialData();
+        const shelves = ['A','B','C','D','E','F','G','H'];
+        const opts = shelves.map(s => `<option value="${s}">${s}货架</option>`).join('');
+        document.getElementById('shelfSelect').innerHTML = opts;
+        document.getElementById('formShelf').innerHTML = opts;
+        document.getElementById('shelfSelect').value = 'A';
+        document.getElementById('formShelf').value = 'A';
+        updateTargetHint();
+        document.getElementById('shelfSelect').addEventListener('change', (e) => { currentShelf = e.target.value; renderShelfGrid(); });
+        document.getElementById('formShelf').addEventListener('change', updateTargetHint);
+        document.getElementById('formLevel').addEventListener('input', updateTargetHint);
+        document.getElementById('formCol').addEventListener('input', updateTargetHint);
+        document.getElementById('locateBtn').addEventListener('click', quickLocate);
+        document.getElementById('manualSaveBtn').addEventListener('click', manualSave);
+        document.getElementById('undoBtn').addEventListener('click', undo);
+        document.getElementById('redoBtn').addEventListener('click', redo);
+        document.getElementById('refreshBtn').addEventListener('click', () => refreshAllViews());
+        document.getElementById('exportBtn').addEventListener('click', exportData);
+        document.getElementById('batchDeleteBtn').addEventListener('click', batchDelete);
+        document.getElementById('quickAddSuggestion').addEventListener('click', quickAddSuggestion);
+        document.getElementById('searchBtn').addEventListener('click', () => { currentKeyword = document.getElementById('searchInput').value; refreshAllViews(); });
+        document.getElementById('resetSearchBtn').addEventListener('click', () => { document.getElementById('searchInput').value = ''; currentKeyword = ''; refreshAllViews(); });
+        document.getElementById('addStockForm').addEventListener('submit', addStockItem);
+        // 图片预览带文件名
+        document.getElementById('formImages').addEventListener('change', (e) => {
+            const container = document.getElementById('imagePreviewContainer');
+            container.innerHTML = '';
+            const files = Array.from(e.target.files);
+            files.slice(0, MAX_IMAGES).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    const div = document.createElement('div');
+                    div.className = 'image-preview-item';
+                    const img = document.createElement('img');
+                    img.src = ev.target.result;
+                    const span = document.createElement('span');
+                    span.innerText = file.name.length > 10 ? file.name.slice(0,8)+'...' : file.name;
+                    div.appendChild(img);
+                    div.appendChild(span);
+                    container.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+        document.getElementById('showAllBtn').addEventListener('click', showAllItems);
+        document.getElementById('selectAllCheckbox').addEventListener('change', (e) => { document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = e.target.checked); });
+        startAutoSave();
+        pushHistory();
+        addLog("系统启动", "欢迎使用清仓库存系统 (精简数量控件+重量联动)");
+    }
+    initLogin();
+</script>
+</body>
+</html>
